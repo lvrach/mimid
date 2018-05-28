@@ -14,7 +14,7 @@ type Resource struct {
 	Path     string
 	Header   map[string]string
 	Data     string
-	Status   string
+	Status   int
 	Response string
 }
 

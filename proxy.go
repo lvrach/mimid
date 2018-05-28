@@ -13,6 +13,7 @@ import (
 type Proxy struct {
 	remoteURL *url.URL
 	savePath  string
+	resources []Resource
 }
 
 func NewProxy(endpoint string, savePath string) (Proxy, error) {
@@ -30,6 +31,7 @@ func NewProxy(endpoint string, savePath string) (Proxy, error) {
 	return Proxy{
 		remoteURL,
 		savePath,
+		[]Resource{},
 	}, nil
 }
 
@@ -42,7 +44,7 @@ func (p Proxy) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 
 	proxy.ModifyResponse = func(remoteRes *http.Response) error {
 		req.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
-		p.observe(remoteRes, req)
+		p.capture(remoteRes, req)
 
 		return nil
 	}
@@ -50,7 +52,7 @@ func (p Proxy) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	proxy.ServeHTTP(res, req)
 }
 
-func (p Proxy) observe(res *http.Response, req *http.Request) {
+func (p Proxy) capture(res *http.Response, req *http.Request) {
 	f, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		log.Println(err)
@@ -65,7 +67,10 @@ func (p Proxy) observe(res *http.Response, req *http.Request) {
 		Data:     string(bodyBytes),
 		Header:   parseHeader(filterHeader(req.Header)),
 		Response: string(f),
+		Status:   res.StatusCode,
 	}
+
+	p.resources = append(p.resources, r)
 
 	r.Save(p.savePath)
 }
@@ -87,38 +92,3 @@ func filterHeader(hdr http.Header) http.Header {
 
 	return hdr
 }
-
-// func (p Proxy) a_ServeHTTP(res http.ResponseWriter, req *http.Request) {
-// 	p.remoteURL.Path = req.URL.Path
-
-// 	remoteReq, err := http.NewRequest(req.Method, p.remoteURL.String(), nil)
-// 	remoteReq.Header = req.Header
-// 	if err != nil {
-// 		log.Println(err)
-// 		res.WriteHeader(505)
-// 	}
-
-// 	remoteRes, err := p.client.Do(remoteReq)
-// 	if err != nil {
-// 		log.Println(err)
-// 		res.WriteHeader(505)
-// 	}
-
-// 	p.observe(remoteRes, req)
-
-// 	header := res.Header()
-// 	header.Set("", "")
-// 	remoteRes.H
-
-// 	res.WriteHeader(remoteRes.StatusCode)
-
-// 	ioutil.ReadAll(io.TeeReader(remoteRes.Body, res))
-// }
-
-// func copyHeader(dst, src http.Header) {
-// 	for k, vv := range src {
-// 		for _, v := range vv {
-// 			dst.Add(k, v)
-// 		}
-// 	}
-// }

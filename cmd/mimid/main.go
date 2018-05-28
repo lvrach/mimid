@@ -14,7 +14,6 @@ func main() {
 	switch args[0] {
 	case "proxy":
 		endpoint := args[1]
-		//("https://pal-test.adyen.com"
 		proxy, err := mimid.NewProxy(endpoint, "./testdata")
 		if err != nil {
 			log.Fatalln(err)
