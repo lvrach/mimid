@@ -11,31 +11,32 @@ import (
 )
 
 type Proxy struct {
-	remoteURL *url.URL
-	savePath  string
-	resources []Resource
+	remoteURL      *url.URL
+	savePath       string
+	resources      []Resource
+	lastOccurrence map[string]int
 }
 
-func NewProxy(endpoint string, savePath string) (Proxy, error) {
-
+func NewProxy(endpoint string, savePath string) (*Proxy, error) {
 	err := os.MkdirAll(savePath, 0770)
 	if err != nil {
-		return Proxy{}, err
+		return &Proxy{}, err
 	}
 
 	remoteURL, err := url.Parse(endpoint)
 	if err != nil {
-		return Proxy{}, err
+		return &Proxy{}, err
 	}
 
-	return Proxy{
+	return &Proxy{
 		remoteURL,
 		savePath,
 		[]Resource{},
+		make(map[string]int),
 	}, nil
 }
 
-func (p Proxy) ServeHTTP(res http.ResponseWriter, req *http.Request) {
+func (p *Proxy) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	proxy := httputil.NewSingleHostReverseProxy(p.remoteURL)
 
 	bodyBytes, _ := ioutil.ReadAll(req.Body)
@@ -52,7 +53,7 @@ func (p Proxy) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	proxy.ServeHTTP(res, req)
 }
 
-func (p Proxy) capture(res *http.Response, req *http.Request) {
+func (p *Proxy) capture(res *http.Response, req *http.Request) {
 	f, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		log.Println(err)
@@ -70,9 +71,35 @@ func (p Proxy) capture(res *http.Response, req *http.Request) {
 		Status:   res.StatusCode,
 	}
 
+	r.After = p.detectAfter(r)
+
 	p.resources = append(p.resources, r)
 
+	p.lastOccurrence[r.expectHash()] = len(p.resources) - 1
+
 	r.Save(p.savePath)
+}
+
+func (p *Proxy) detectAfter(current Resource) []string {
+	after := make([]string, 0)
+
+	expectHash := current.expectHash()
+	start, found := p.lastOccurrence[expectHash]
+
+	if !found {
+		return after
+	}
+
+	if len(p.resources) == 0 {
+		return after
+	}
+
+	rr := p.resources[start : len(p.resources)-1]
+	for _, r := range rr {
+		after = append(after, r.Name())
+	}
+
+	return after
 }
 
 func parseHeader(src http.Header) (dst map[string]string) {

@@ -5,15 +5,17 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"sort"
 )
 
 type FakeServer struct {
-	resources []Resource
+	resources   []Resource
+	resourceLog []string
 }
 
 func NewFakeServer(testData string) http.Handler {
 
-	fk := FakeServer{}
+	fk := &FakeServer{}
 	fk.load(testData)
 	return fk
 }
@@ -43,24 +45,44 @@ func (fk *FakeServer) load(path string) {
 
 }
 
-func (fk FakeServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
+func (fk *FakeServer) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	resource, ok := fk.findResource(req)
-	log.Println(req.URL.Path)
 	if !ok {
+		log.Println(req.URL.Path)
 		res.WriteHeader(400)
 		return
 	}
 
-	res.WriteHeader(200)
+	log.Println(resource.Name())
+
+	fk.resourceLog = append(fk.resourceLog, resource.Name())
+
+	res.WriteHeader(resource.Status)
 	res.Write([]byte(resource.Response))
 }
 
-func (fk FakeServer) findResource(req *http.Request) (Resource, bool) {
-	for _, r := range fk.resources {
-		if r.Verb == req.Method && r.Path == req.URL.Path {
-			return r, true
-		}
+func (fk *FakeServer) findResource(req *http.Request) (Resource, bool) {
+	candidates := make([]Resource, 0)
+
+	body, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		log.Println(err)
 	}
 
-	return Resource{}, false
+	for _, r := range fk.resources {
+		if r.Verb == req.Method &&
+			r.Path == req.URL.Path &&
+			r.Data == string(body) &&
+			r.IsAfter(fk.resourceLog) {
+			candidates = append(candidates, r)
+		}
+	}
+	if len(candidates) == 0 {
+		log.Println(string(body))
+		return Resource{}, false
+	}
+
+	sort.Sort(bySpecificity(candidates))
+
+	return candidates[0], true
 }
