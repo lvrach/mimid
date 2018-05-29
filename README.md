@@ -1,7 +1,7 @@
 # mimid
 HTTP Mocking go library  
 
-Attempts to ease the creation of mocks for HTTP APIs.
+Mimid attempts to ease the creation of mocks for HTTP APIs.
 
 ## How it works 
 
