@@ -2,6 +2,7 @@ package mimid
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -12,24 +13,31 @@ import (
 
 type Proxy struct {
 	remoteURL      *url.URL
+	localURL       *url.URL
 	savePath       string
 	resources      []Resource
 	lastOccurrence map[string]int
 }
 
-func NewProxy(endpoint string, savePath string) (*Proxy, error) {
+func NewProxy(local, remote, savePath string) (*Proxy, error) {
 	err := os.MkdirAll(savePath, 0770)
 	if err != nil {
 		return &Proxy{}, err
 	}
 
-	remoteURL, err := url.Parse(endpoint)
+	remoteURL, err := url.Parse(remote)
+	if err != nil {
+		return &Proxy{}, err
+	}
+
+	localURL, err := url.Parse(local)
 	if err != nil {
 		return &Proxy{}, err
 	}
 
 	return &Proxy{
 		remoteURL,
+		localURL,
 		savePath,
 		[]Resource{},
 		make(map[string]int),
@@ -54,20 +62,24 @@ func (p *Proxy) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 }
 
 func (p *Proxy) capture(res *http.Response, req *http.Request) {
-	f, err := ioutil.ReadAll(res.Body)
+	resBody, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		log.Println(err)
 	}
-	res.Body = ioutil.NopCloser(bytes.NewBuffer(f))
 
-	bodyBytes, _ := ioutil.ReadAll(req.Body)
+	resBody = bytes.Replace(resBody, []byte(p.remoteURL.String()), []byte(p.localURL.String()), -1)
+
+	res.Header.Set("Content-Length", fmt.Sprint(len(resBody)))
+	res.Body = ioutil.NopCloser(bytes.NewBuffer(resBody))
+
+	reqBody, _ := ioutil.ReadAll(req.Body)
 
 	r := Resource{
 		Verb:     req.Method,
 		Path:     req.URL.Path,
-		Data:     string(bodyBytes),
+		Data:     string(reqBody),
 		Header:   parseHeader(filterHeader(req.Header)),
-		Response: string(f),
+		Response: string(resBody),
 		Status:   res.StatusCode,
 	}
 

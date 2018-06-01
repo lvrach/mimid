@@ -14,7 +14,7 @@ func main() {
 	switch args[0] {
 	case "proxy":
 		endpoint := args[1]
-		proxy, err := mimid.NewProxy(endpoint, "./testdata")
+		proxy, err := mimid.NewProxy("http://localhost:9922", endpoint, "./testdata")
 		if err != nil {
 			log.Fatalln(err)
 		}
